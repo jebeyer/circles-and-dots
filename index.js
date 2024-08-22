@@ -278,7 +278,7 @@ class dotGroup {
 
 			this.radius3.copy(pt1);
 			this.radius3.addScaledVector(this.center3,-1.0);
-			this.radius3.setLength(20.0*Math.cos(distanceToCenter/20.0));
+			this.radius3.setLength(20.0*Math.sin(Math.acos(distanceToCenter/20.0)));
 
 			return true;
 		}
