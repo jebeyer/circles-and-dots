@@ -6,6 +6,7 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 const container = document.querySelector('.container');
 const canvas    = document.querySelector('.canvas');
 
+const circlesOutput = document.getElementById("numCirclesOutput");
 const table1 = document.querySelectorAll('#bottom-right-table td');
 window.onload = function() {
 
@@ -20,6 +21,8 @@ window.onload = function() {
 		table1[i*4+6].textContent = 0;
 		table1[i*4+7].textContent = 0;
     }
+	
+	circlesOutput.textContent = 0;
 };	
 
 let
@@ -211,78 +214,83 @@ class dotGroup {
 		let pt1 = new THREE.Vector3();
 		let pt2 = new THREE.Vector3();
 		let pt3 = new THREE.Vector3();
-		let tmpDist, indexL, indexR;
+		let tmpDist, indexL, indexR, currIndex;
 
 		let distanceMat = [9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999];
-		let closest = [0,0,0];
+		let closest = [0,0,0,0,0,0,0,0,0];
 		for (let i=0; i<3; i++) {
 			for (let j=0; j<3; j++) {
+				currIndex = 3*i + j;
 				tmpDist = dots[this.left[i]].position.distanceTo(dots[this.right[j]].position);
-				distanceMat[3*i+j] = tmpDist;
-				if (tmpDist < distanceMat[closest[2]]) {
-					if (tmpDist < distanceMat[closest[1]]) {
-						if (tmpDist < distanceMat[closest[0]]) {
-							closest[2] = closest[1];
-							closest[1] = closest[0];
-							closest[0] = 3*i + j;
-						} else {
-							closest[2] = closest[1];
-							closest[1] = 3*i + j;
-						}
-					} else {
-						closest[2] = 3*i + j;
-					}
+				distanceMat[currIndex] = tmpDist;
+				
+				let newIndex = currIndex;
+				while (newIndex > 0 && distanceMat[closest[newIndex-1]] > tmpDist) {
+					closest[newIndex] = closest[newIndex-1];
+					newIndex--;
 				}
+				closest[newIndex] = 3*i + j;
 			}
 		}
+		
+		let i = 0;
+		let j = 1;
+		let	k = 2;
+		while (i<7) {
+			indexR = closest[i] %3;
+			indexL = (closest[i] - indexR)/3;
+			pt1.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
+			pt1.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
+			pt1.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
+			
+			j = i+1;
+			while (j<8) {
+				indexR = closest[j] %3;
+				indexL = (closest[j] - indexR)/3;
+				pt2.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
+				pt2.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
+				pt2.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
 
-		indexR = closest[0] %3;
-		indexL = (closest[0] - indexR)/3;
-		pt1.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
-		pt1.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
-		pt1.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
+				k = j+1;
+				while (k<9) {
+					indexR = closest[k] %3;
+					indexL = (closest[k] - indexR)/3;
+					pt3.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
+					pt3.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
+					pt3.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
 
-		indexR = closest[1] %3;
-		indexL = (closest[1] - indexR)/3;
-		pt2.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
-		pt2.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
-		pt2.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
+					let mat = new THREE.Matrix3(pt1.x, pt2.x, pt3.x, pt1.y, pt2.y, pt3.y, pt1.z, pt2.z, pt3.z);
+					const det = mat.determinant();
 
-		indexR = closest[2] %3;
-		indexL = (closest[2] - indexR)/3;
-		pt3.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
-		pt3.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
-		pt3.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
+					if ( det > 0 ) {
+						this.plane.setFromCoplanarPoints(pt1,pt2,pt3);
+					} else if ( det < 0 ) {
+						this.plane.setFromCoplanarPoints(pt1,pt3,pt2);
+					} 
 
-		let mat = new THREE.Matrix3(pt1.x, pt2.x, pt3.x, pt1.y, pt2.y, pt3.y, pt1.z, pt2.z, pt3.z);
-		const det = mat.determinant();
+					if (this.areDotsDivided()) {
 
-		if ( det > 0 ) {
-			this.plane.setFromCoplanarPoints(pt1,pt2,pt3);
-		} else if ( det < 0 ) {
-			this.plane.setFromCoplanarPoints(pt1,pt3,pt2);
-		} else {
-			// det = 0 -> what do? nothing?
-			return false;
+						const zeroVec = new THREE.Vector3(0.0, 0.0, 0.0);
+
+						const normalVec = this.plane.normal.clone();
+						normalVec.normalize();
+						const distanceToCenter = Math.abs(this.plane.distanceToPoint(zeroVec));
+						zeroVec.addScaledVector(normalVec, distanceToCenter);
+						this.center3.copy(zeroVec);
+
+						this.radius3.copy(pt1);
+						this.radius3.addScaledVector(this.center3,-1.0);
+						this.radius3.setLength(20.0*Math.sin(Math.acos(distanceToCenter/20.0)));
+
+						return true;
+					}
+					k++;
+				}
+				j++;
+			}
+			i++;
 		}
-
-		if (this.areDotsDivided()) {
-
-			const zeroVec = new THREE.Vector3(0.0, 0.0, 0.0);
-
-			const normalVec = this.plane.normal.clone();
-			normalVec.normalize();
-			const distanceToCenter = Math.abs(this.plane.distanceToPoint(zeroVec));
-			zeroVec.addScaledVector(normalVec, distanceToCenter);
-			this.center3.copy(zeroVec);
-
-			this.radius3.copy(pt1);
-			this.radius3.addScaledVector(this.center3,-1.0);
-			this.radius3.setLength(20.0*Math.sin(Math.acos(distanceToCenter/20.0)));
-
-			return true;
-		}
-
+		
 		return false;
 	}
 
@@ -385,7 +393,7 @@ const setCircles2 = () => {
 		}
 
 	}
-
+	
 }
 
 const updateCircles2 = () => {
@@ -555,6 +563,7 @@ const render = () => {
 	requestAnimationFrame(render.bind(this))
 
 	updateDotPositionTable();
+	circlesOutput.textContent = circles.length;
   
 }
 
