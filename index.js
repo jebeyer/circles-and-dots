@@ -22,136 +22,6 @@ window.onload = function() {
     }
 };	
 
-// ---------------------------------------------------------------------------------
-function getRandomInt() {
-
-	return Math.ceil(Math.random() * 32676);
-
-}
-
-let R = [];
-let INF = 1e18;
-
-// Function to shuffle array
-function shuffle(array) {
-
-	let currentIndex = array.length, randomIndex;
-	while (currentIndex != 0) {
-		randomIndex = Math.floor(Math.random() * currentIndex);
-		currentIndex--;
-		[array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
-	}
-	return array;
-}
-
-class Circle2D {
-
-	constructor(p = new THREE.Vector2(0, 0), b = 0)
-	{
-		this.C = p;
-		this.R = b;
-	}
-};
-
-function is_inside(c, p){
-	
-	let tmp = new THREE.Vector2();
-	tmp.copy(p);
-	
-	return (tmp.distanceTo(c.C) <= c.R);
-}
-
-function get_circle_center( bx, by, cx, cy) {
-	
-	let tmpPt = new THREE.Vector2();
-	let B = bx * bx + by * by;
-	let C = cx * cx + cy * cy;
-	let D = bx * cy - by * cx;
-	tmpPt.x = (cy * B - by * C) / (2 * D);
-	tmpPt.y = (bx * C - cx * B) / (2 * D); 
-	return tmpPt;
-}
-
-function circle_from_3(A, B, C) 
-{
-	let I = get_circle_center(B.x - A.x, B.y - A.y, C.x - A.x, C.y - A.y);
-
-	I.x += A.x;
-	I.y += A.y;
-	return new Circle2D(I, A.distanceTo(I));
-}
-
-function circle_from_2(A, B) {
-	let C = new THREE.Vector2((A.x + B.x) / 2.0, (A.y + B.y) / 2.0);
-
-	return new Circle2D(C, B.distanceTo(A) / 2.0);
-}
-
-function is_valid_circle(c, P) {
-
-	for (let p in P) {
-		if (!is_inside(c, p)) return false;
-	}
-	return true;
-}
-
-function min_circle_trivial(P) {
-	
-	if (P.length == 0) {
-		return new Circle2D(new THREE.Vector2(0, 0), 0);
-	} else if (P.length == 1) {
-		return new Circle2D(P[0], 0);
-	} else if (P.length == 2) {
-		return circle_from_2(P[0], P[1]);
-	}
-
-	for (let i = 0; i < 3; i++) {
-		for (let j = i + 1; j < 3; j++) {
-
-			let c = circle_from_2(P[i], P[j]);
-			if (is_valid_circle(c, P)) return c;
-		}
-	}
-	return circle_from_3(P[0], P[1], P[2]);
-	
-}
-
-function welzl_helper(P, n)
-{
-
-	if (n == 0 || R.length == 3) {
-		return min_circle_trivial(R);
-	}
-	let idx = getRandomInt() % n;
-	let p = new THREE.Vector2();
-	p.copy(P[idx]);
-	let temp = new THREE.Vector2();
-	temp.copy(P[idx]);
-	P[idx] = P[n - 1];
-	P[n - 1] = temp;
-
-	let d = welzl_helper(P, n - 1);
-
-	if (is_inside(d, p)) {
-		return d;
-	}
-	R.push(p);
-	return welzl_helper(P, n - 1);
-
-}
-
-function welzl(P) {
-	
-	R = [];
-	shuffle(P);
-	return welzl_helper(P, P.length);
-}
-
-// Welzl's algorithm adapted from code by phasing17
-// https://www.geeksforgeeks.org/minimum-enclosing-circle-using-welzls-algorithm/
-// ---------------------------------------------------------------------------------
-
-
 let
 sizes,
 scene1,
@@ -166,8 +36,7 @@ baseMesh,
 minMouseDownFlag,
 mouseDown,
 grabbing,
-selection,
-boundingradius;
+selection;
 
 let offset = new THREE.Vector3();
 let dots = [];
@@ -200,7 +69,6 @@ const setScene = () => {
 	});
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-	//scene1.add(new THREE.HemisphereLight(0xffffbb, 0x080820, 1.5));
 	const light1 = new THREE.AmbientLight( 0xffffbb ); // soft white light
 	scene1.add( light1 );
 
@@ -215,7 +83,7 @@ const setScene = () => {
 	setBaseSphere();
 	setDots();
 	setupDgList();
-	setCircles();
+	setCircles2();
 	resize();
 	listenTo();
 	render();
@@ -245,13 +113,10 @@ const setControls = () => {
 		let tmp3 = event.object.position.clone();
 		tmp3.setLength(20);
 		if (tmp3.z == 20) tmp3.z -= 0.01;
-		tmp3.normalize();
-		event.object.pos2.x = tmp3.x / (1 - tmp3.z);
-		event.object.pos2.y = tmp3.y / (1 - tmp3.z);
 		tmp3.setLength(20);
 		event.object.position.copy(tmp3);
 		
-		updateCircles();
+		updateCircles2();
 
 	} );
 	dragcontrols.addEventListener( 'dragend', function ( event ) {
@@ -288,7 +153,6 @@ class dot extends THREE.Mesh {
     constructor(geom, mat) {
         super(geom, mat);
 		super.name = "dot";
-		this.pos2 = new THREE.Vector2();
     }
 
 }
@@ -298,54 +162,10 @@ class circle extends THREE.Mesh {
     constructor(geom, mat) {
         super(geom, mat);
 		super.name = "circle";
-		this.center2 = new THREE.Vector2();
-		this.point2 = new THREE.Vector2();
 		this.center3 = new THREE.Vector3();
-		this.point3 = new THREE.Vector3();
-		this.radvec2 = new THREE.Vector2();
 		this.radvec3 = new THREE.Vector3();
 		this.dg = 11;
     }
-
-}
-
-function notThreeInside (ctr, rad) {
-
-	let distances = [];
-	for (let i=0; i<6; i++) {
-		const tmpDistance = ctr.distanceTo(dots[i].pos2);
-		distances.push(tmpDistance);
-	}
-	distances.sort(compareNumbers);
-
-	return ((rad < distances[2]) || (rad > distances[3]));
-
-}
-
-function countOutside (ctr, radius) {
-
-	let count = 0;
-
-	let tmpDistance;
-	for (let i=0; i<dots.length;i++) {
-		tmpDistance = ctr.distanceTo(dots[i].pos2);
-		if (tmpDistance > radius) count++;
-	}
-
-	return count;
-
-}
-
-function getRadius (ctr) {
-
-	let distances = [];
-	for (let i=0; i<6; i++) {
-		const tmpDistance = ctr.distanceTo(dots[i].pos2);
-		distances.push(tmpDistance);
-	}
-	distances.sort(compareNumbers);
-
-	return (distances[2] + 3*distances[3])/4;
 
 }
 
@@ -362,75 +182,107 @@ class dotGroup {
 		this.center2 = new THREE.Vector2();
 		this.radius2 = 0.0;
 		this.circles = 0;
+		this.plane = new THREE.Plane();
+		this.center3 = new THREE.Vector3();
+		this.radius3 = new THREE.Vector3();
 
 	}
-	getCenter () {
+	areDotsDivided() {
+		if (this.plane.isPlane) {
 
-		if (this.circles > 0) return false;
-
-		let ctr3 = new THREE.Vector3();
-		let ctr2 = new THREE.Vector2();
-		let count, rad, tmpDistance;
-
-		let leftPts = [];
-		for (let k1=0; k1<this.left.length; k1++) {
-			const tmpPt = dots[this.left[k1]].pos2.clone();
-			leftPts.push(tmpPt);
-		}
-		let mecLeft = welzl(leftPts);
-		if (!isNaN(mecLeft.R)) {
-			ctr2.copy(mecLeft.C); 
-			rad = getRadius(ctr2);
-			//console.log("A", mecLeft.R, rad);
-			//if (countOutside(ctr2, rad) == 3) {
-				if (ctr2.distanceTo(dots[this.left[0]].pos2) < rad) {
-					if (ctr2.distanceTo(dots[this.left[1]].pos2) < rad) {
-						if (ctr2.distanceTo(dots[this.left[2]].pos2) < rad) {
-							this.center2.copy(ctr2);
-							this.radius2 = rad;
-							return true;
-						}
+			let distances = [];
+			for (let i=0; i<dots.length; i++) {
+				const tmpDist = Math.sign(this.plane.distanceToPoint(dots[i].position));
+				distances.push(tmpDist);
+			}
+			if (distances[this.left[0]] == distances[this.left[1]] && distances[this.left[0]] == distances[this.left[2]]) {
+				if (distances[this.left[0]] != distances[this.right[0]]) {
+					if (distances[this.right[0]] == distances[this.right[1]] && distances[this.right[0]] == distances[this.right[2]]) {
+						return true;
 					}
 				}
-			//} 
-
-		} else {
-
-			let rightPts = [];
-			for (let k1=0; k1<this.right.length; k1++) {
-				const tmpPt = dots[this.right[k1]].pos2.clone();
-				leftPts.push(tmpPt);
-			}
-			let mecRight = welzl(rightPts);
-			if (!isNaN(mecRight.R)) {
-				ctr2.copy(mecRight.C);
-				rad = getRadius(ctr2); 
-				//console.log("A", mecLeft.R, rad);
-				//if (countOutside(ctr2, rad) == 3) {
-					if (ctr2.distanceTo(dots[this.right[0]].pos2) < rad) {
-						if (ctr2.distanceTo(dots[this.right[1]].pos2) < rad) {
-							if (ctr2.distanceTo(dots[this.right[2]].pos2) < rad) {
-								this.center2.copy(ctr2);
-								this.radius2 = rad;
-								return true;
-							}
-						}
-					}
-				//} 
 			}
 		}
 		return false;
 	}
+	getPlane() {
+		if (this.circles > 0) return false;
 
-}
+		let pt1 = new THREE.Vector3();
+		let pt2 = new THREE.Vector3();
+		let pt3 = new THREE.Vector3();
+		let tmpDist, indexL, indexR;
 
-function dgEqual (dg1, dg2) {
+		let distanceMat = [9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999, 9999.999];
+		let closest = [0,0,0];
+		for (let i=0; i<3; i++) {
+			for (let j=0; j<3; j++) {
+				tmpDist = dots[this.left[i]].position.distanceTo(dots[this.right[j]].position);
+				distanceMat[3*i+j] = tmpDist;
+				if (tmpDist < distanceMat[closest[2]]) {
+					if (tmpDist < distanceMat[closest[1]]) {
+						if (tmpDist < distanceMat[closest[0]]) {
+							closest[2] = closest[1];
+							closest[1] = closest[0];
+							closest[0] = 3*i + j;
+						} else {
+							closest[2] = closest[1];
+							closest[1] = 3*i + j;
+						}
+					} else {
+						closest[2] = 3*i + j;
+					}
+				}
+			}
+		}
 
-	if ((dg1.left[1] == dg2.left[1]) && (dg1.left[2] == dg2.left[2]) && (dg1.left[3] == dg2.left[3])) {
-		return true;
-	} else if ((dg1.right[1] == dg2.right[1]) && (dg1.right[2] == dg2.right[2]) && (dg1.right[3] == dg2.right[3])) {
-		return true;
-	} else {
+		indexR = closest[0] %3;
+		indexL = (closest[0] - indexR)/3;
+		pt1.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
+		pt1.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
+		pt1.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
+
+		indexR = closest[1] %3;
+		indexL = (closest[1] - indexR)/3;
+		pt2.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
+		pt2.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
+		pt2.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
+
+		indexR = closest[2] %3;
+		indexL = (closest[2] - indexR)/3;
+		pt3.x = (dots[this.left[indexL]].position.x + dots[this.right[indexR]].position.x)/2;
+		pt3.y = (dots[this.left[indexL]].position.y + dots[this.right[indexR]].position.y)/2;
+		pt3.z = (dots[this.left[indexL]].position.z + dots[this.right[indexR]].position.z)/2;
+
+		let mat = new THREE.Matrix3(pt1.x, pt2.x, pt3.x, pt1.y, pt2.y, pt3.y, pt1.z, pt2.z, pt3.z);
+		const det = mat.determinant();
+
+		if ( det > 0 ) {
+			this.plane.setFromCoplanarPoints(pt1,pt2,pt3);
+		} else if ( det < 0 ) {
+			this.plane.setFromCoplanarPoints(pt1,pt3,pt2);
+		} else {
+			// det = 0 -> what do? nothing?
+			return false;
+		}
+
+		if (this.areDotsDivided()) {
+
+			const zeroVec = new THREE.Vector3(0.0, 0.0, 0.0);
+
+			const normalVec = this.plane.normal.clone();
+			normalVec.normalize();
+			const distanceToCenter = Math.abs(this.plane.distanceToPoint(zeroVec));
+			zeroVec.addScaledVector(normalVec, distanceToCenter);
+			this.center3.copy(zeroVec);
+
+			this.radius3.copy(pt1);
+			this.radius3.addScaledVector(this.center3,-1.0);
+			this.radius3.setLength(20.0*Math.cos(distanceToCenter/20.0));
+
+			return true;
+		}
+
 		return false;
 	}
 
@@ -458,7 +310,6 @@ const setDots = () => {
     let tmpDot, randomx, randomy, randomz, scaleMag;
     const dotGeom = new THREE.SphereGeometry(0.7, 12, 12);
     const dotMat = new THREE.MeshPhongMaterial({color: 0x112211});
-	boundingradius = 0;
 	
     for (let i = 0; i < 6; i++) {
 
@@ -466,20 +317,15 @@ const setDots = () => {
 		tmpDot = new dot(dotGeom, dotMat);
 		dots.push(tmpDot);
 		
-		tmpDot.position.x = Math.cos(1+i*Math.random());
-		tmpDot.position.y = Math.cos(2+i*Math.random());
-		tmpDot.position.z = Math.cos(3+i*Math.random());
+		tmpDot.position.x = Math.random() * 2 - 1;
+		tmpDot.position.y = Math.random() * 2 - 1;
+		tmpDot.position.z = Math.random() * 2 - 1;
 		tmpDot.position.normalize();
 		if (tmpDot.position.z == 1) {
 			tmpDot.position.z -= 0.01;
 			tmpDot.position.normalize();
 		}
-		tmpDot.pos2.x = tmpDot.position.x / (1 - tmpDot.position.z);
-		tmpDot.pos2.y = tmpDot.position.y / (1 - tmpDot.position.z);
 		tmpDot.position.setLength(20);
-
-		const tmpMag2 = Math.sqrt(Math.pow(tmpDot.pos2.x,2)+Math.pow(tmpDot.pos2.y,2));
-		boundingradius = 0.9 * Math.max(boundingradius,tmpMag2);
 
 		scene1.add(tmpDot);
 
@@ -498,60 +344,25 @@ const updateDotPositionTable = () => {
 	
 }
 
-const setCircles = () => {
-	
-	let tmpCircle, torusGeom, torusMat, tmpPt2, tmpPt3, ctr2, ctr3, pnt2, pnt3, rad2, rad3, radius2;
-	ctr2 = new THREE.Vector2();
-	pnt2 = new THREE.Vector2();
-	tmpPt2 = new THREE.Vector2();
-	pnt3 = new THREE.Vector3();
-	tmpPt3 = new THREE.Vector3();
-	
+const setCircles2 = () => {
+
+	let tmpCircle, torusGeom, torusMat, ctr3;
+
 	for (let i=0; i<10; i++) {
 
-		if (dotGroups[i].getCenter()) {
+		if (dotGroups[i].getPlane()) {
 
 			dotGroups[i].circles = 1;
 
-			ctr2.copy(dotGroups[i].center2);
-			radius2 = dotGroups[i].radius2;
-			//console.log("C", ctr2,radius2);
-			let tmpMag = ctr2.length();
-			if (tmpMag < 0.1) {
-				pnt2.x = ctr2.x + radius2;
-				pnt2.y = ctr2.y;
-			} else {
-				pnt2.x = ctr2.x * (tmpMag + radius2) / tmpMag;
-				pnt2.y = ctr2.y * (tmpMag + radius2) / tmpMag;
-			}
-			rad2 = pnt2.clone();
-			rad2.addScaledVector(ctr2,-1);
-			tmpPt2 = ctr2.clone();
-			tmpPt2.addScaledVector(rad2,-1);
-			pnt3.x = (2 * pnt2.x)/(1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2));
-			pnt3.y = (2 * pnt2.y)/(1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2));
-			pnt3.z = (-1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2))/(1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2));
-			pnt3.setLength(20);
-			tmpPt3.x = (2 * tmpPt2.x)/(1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2));
-			tmpPt3.y = (2 * tmpPt2.y)/(1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2));
-			tmpPt3.z = (-1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2))/(1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2));
-			tmpPt3.setLength(20);
-			rad3 = pnt3.clone();
-			rad3.addScaledVector(tmpPt3,-1);
-			let radius3 = rad3.length() * 0.5;
-			rad3.setLength(radius3);
-			ctr3 = rad3.clone();
-			ctr3.addScaledVector(tmpPt3,1);
+			let radius3 = dotGroups[i].radius3.length();
+			let ctr3 = dotGroups[i].center3.clone();
+			//ctr3.setLength(20.0*Math.sin(radius3/20.0));
 
 			torusGeom = new THREE.TorusGeometry(radius3,0.2,12,60);
 			torusMat = new THREE.MeshBasicMaterial({ color: 0x202020 });
 			tmpCircle = new circle(torusGeom, torusMat);
-			tmpCircle.center2.copy(ctr2);
-			tmpCircle.point2.copy(pnt2);
-			tmpCircle.center3.copy(ctr3);
-			tmpCircle.point3.copy(pnt3);
-			tmpCircle.radvec2.copy(rad2);
-			tmpCircle.radvec3.copy(rad3);
+			tmpCircle.center3.copy(dotGroups[i].center3);
+			tmpCircle.radvec3.copy(dotGroups[i].radius3);
 			tmpCircle.dg = i;
 			circles.push(tmpCircle);
 			circleGeoms.push(torusGeom);
@@ -577,20 +388,14 @@ const setCircles = () => {
 
 }
 
-const updateCircles = () => {
+const updateCircles2 = () => {
 
-	let tmpCircle, torusGeom, torusMat, tmpPt2, tmpPt3, ctr2, ctr3, pnt2, pnt3, rad2, rad3, radius2;
-	tmpPt2 = new THREE.Vector2();
-	tmpPt3 = new THREE.Vector3();
-	ctr2 = new THREE.Vector2();
-	pnt2 = new THREE.Vector2();
-	pnt3 = new THREE.Vector3();
+	let tmpCircle, torusGeom, torusMat, ctr3;
 	let removedCircles = false;
 
 	for (let i=0; i<circles.length; i++) {
 
-		const oldrad2 = circles[i].radvec2.length();
-		if (notThreeInside(circles[i].center2, oldrad2)) { 
+		if (!dotGroups[circles[i].dg].areDotsDivided()) {
 
 			scene1.remove(circles[i]);
 			circleGeoms[i].dispose();
@@ -598,57 +403,26 @@ const updateCircles = () => {
 			circles.splice(i,1);
 			circleGeoms.splice(i,1);
 
-			dotGroups[currDg].circles--;
+			dotGroups[currDg].circles = 0;
 			removedCircles = true;
 		}
 	}
-	
+
 	for (let i=0; i<10; i++) {
 
 		if (dotGroups[i].circles < 1) {
-			if (dotGroups[i].getCenter()) {
+			if (dotGroups[i].getPlane()) {
 
 				dotGroups[i].circles = 1;
 
-				ctr2.copy(dotGroups[i].center2);
-				radius2 = dotGroups[i].radius2;
-				//console.log("D", ctr2,radius2);
-				let tmpMag = ctr2.length();
-				if (tmpMag < 0.1) {
-					pnt2.x = ctr2.x + radius2;
-					pnt2.y = ctr2.y;
-				} else {
-					pnt2.x = ctr2.x * (tmpMag + radius2) / tmpMag;
-					pnt2.y = ctr2.y * (tmpMag + radius2) / tmpMag;
-				}
-				rad2 = pnt2.clone();
-				rad2.addScaledVector(ctr2,-1);
-				tmpPt2 = ctr2.clone();
-				tmpPt2.addScaledVector(rad2,-1);
-				pnt3.x = (2 * pnt2.x)/(1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2));
-				pnt3.y = (2 * pnt2.y)/(1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2));
-				pnt3.z = (-1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2))/(1 + Math.pow(pnt2.x,2) + Math.pow(pnt2.y,2));
-				pnt3.setLength(20);
-				tmpPt3.x = (2 * tmpPt2.x)/(1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2));
-				tmpPt3.y = (2 * tmpPt2.y)/(1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2));
-				tmpPt3.z = (-1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2))/(1 + Math.pow(tmpPt2.x,2) + Math.pow(tmpPt2.y,2));
-				tmpPt3.setLength(20);
-				rad3 = pnt3.clone();
-				rad3.addScaledVector(tmpPt3,-1);
-				let radius3 = rad3.length() * 0.5;
-				rad3.setLength(radius3);
-				ctr3 = rad3.clone();
-				ctr3.addScaledVector(tmpPt3,1);
+				let radius3 = dotGroups[i].radius3.length();
+				let ctr3 = dotGroups[i].center3.clone();
 
 				torusGeom = new THREE.TorusGeometry(radius3,0.2,12,60);
 				torusMat = new THREE.MeshBasicMaterial({ color: 0x202020 });
 				tmpCircle = new circle(torusGeom, torusMat);
-				tmpCircle.center2.copy(ctr2);
-				tmpCircle.point2.copy(pnt2);
-				tmpCircle.center3.copy(ctr3);
-				tmpCircle.point3.copy(pnt3);
-				tmpCircle.radvec2.copy(rad2);
-				tmpCircle.radvec3.copy(rad3);
+				tmpCircle.center3.copy(dotGroups[i].center3);
+				tmpCircle.radvec3.copy(dotGroups[i].radius3);
 				tmpCircle.dg = i;
 				circles.push(tmpCircle);
 				circleGeoms.push(torusGeom);
@@ -671,25 +445,28 @@ const updateCircles = () => {
 			}
 		}
 	}
-	
-	//for (let jj=0; jj< circles.length; jj++) {
-		//console.log(jj, circles[jj].dg);
-	//}
 
 }
 
 const guiObj = {
+	autoRotate: false,
+	animateDots: false,
 	sphereColor: 0x9b66e6,
 	sphereOpacity: 0.9,
 	dotColor: 0x112211
 }
-gui.addColor(guiObj, 'sphereColor').onChange( value => {
+gui.add(guiObj, 'autoRotate').onChange( value => {
+	controls.autoRotate = value;
+} );
+//gui.add(guiObj, 'animateDots');
+const colorFolder = gui.addFolder( 'colors' );
+colorFolder.addColor(guiObj, 'sphereColor').onChange( value => {
 	baseMesh.material.color.set(value);
 } );
-gui.add(guiObj, 'sphereOpacity', 0, 1).onChange( value => {
+colorFolder.add(guiObj, 'sphereOpacity', 0, 1).onChange( value => {
 	baseMesh.material.opacity = value;
 } );
-gui.addColor(guiObj, 'dotColor').onChange( value => {
+colorFolder.addColor(guiObj, 'dotColor').onChange( value => {
 	for (let j=0; j<dots.length; j++) {
 		dots[j].material.color.set(value);
 	}
@@ -776,7 +553,7 @@ const render = () => {
 	renderer.setViewport( 0, 0, window.innerWidth, window.innerHeight );
 	renderer.render(scene1, camera1);
 	requestAnimationFrame(render.bind(this))
-	  
+
 	updateDotPositionTable();
   
 }

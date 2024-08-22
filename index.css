@@ -39,3 +39,12 @@ html, body {
     text-align: center;
 }
 
+#info {
+	position: absolute;
+    padding: 10px;
+	top: 10px;
+	width: 100%;
+	text-align: left;
+	z-index: 100;
+	display:block;
+}
