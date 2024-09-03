@@ -49,14 +49,16 @@ let circleGeoms = [];
 let dotGroups = [];
 let vertices = [];
 let vertexPairs = [];
-let edges = [];
+let edges = [[]];
 
 let circleColor = 0x202020;
 let	sphVertexColor1 = 0x5ac3d8;
 let	sphVertexColor2 = 0xffc800;
 let	sphEdgeColor = 0xd85ac7;
-let vertexRadius = 24.0;
+let vertexRadius = 20.4;
 let circlesVisible = true;
+let circleUpdateFreq = 1;
+let graphVisible = false;
 
 const gui = new GUI();
 
@@ -131,13 +133,14 @@ const setControls = () => {
 		event.object.material.emissive.set( 0xaaaaaa );
 		let tmp3 = event.object.position.clone();
 		tmp3.setLength(20);
-		if (tmp3.z == 20) tmp3.z -= 0.01;
-		tmp3.setLength(20);
 		event.object.position.copy(tmp3);
 		
-		updateCircles2();
-		updateGraph();
-
+		if (circlesVisible) {
+			updateCircles2();
+		}
+		if (graphVisible) {
+			updateGraph();
+		}
 	} );
 	dragcontrols.addEventListener( 'dragend', function ( event ) {
 
@@ -195,7 +198,7 @@ class vertex extends THREE.Mesh {
     constructor(geom, mat) {
         super(geom, mat);
 		super.name = "vertex";
-		this.visible = true;
+		this.visible = false;
 		this.black = true;
 		this.vp = 99;
 		this.opacity = 0.0;
@@ -213,6 +216,7 @@ class vertexPair {
 		this.negDots = [];
 		this.neighborGroups = [];
 		this.visible = false;
+		this.valence = 0;
 	}
 	setVertexColors(plane) {
 		if (plane.isPlane) {
@@ -240,16 +244,19 @@ class vertexPair {
 				}
 			}
 			if (this.posDots.length == 1 && this.negDots.length == 2) {
+				this.visible = true;
 				vertices[this.v1].visible = true;
 				vertices[this.v1].black = false;
 				vertices[this.v2].visible = true;
 				vertices[this.v2].black = true;
 			} else if (this.posDots.length == 2 && this.negDots.length == 1) {
+				this.visible = true;
 				vertices[this.v1].visible = true;
 				vertices[this.v1].black = true;
 				vertices[this.v2].visible = true;
 				vertices[this.v2].black = false;
 			} else {
+				this.visible = false;
 				vertices[this.v1].visible = false;
 				vertices[this.v2].visible = false;
 			}
@@ -263,7 +270,7 @@ class vertexPair {
 	setDisplay(value) {
 		this.visible = value;
 		
-		if (this.visible) {
+		if (this.visible && graphVisible) {
 			if (vertices[this.v1].visible && vertices[this.v2].visible) {
 				if (vertices[this.v1].black) {
 					vertices[this.v1].material.color.set(sphVertexColor1);
@@ -283,6 +290,7 @@ class vertexPair {
 			vertices[this.v1].material.opacity = 0.0;
 			vertices[this.v2].material.opacity = 0.0;
 		}
+
 		return true;
 	}
 	isNeighbor(vp) {
@@ -300,20 +308,14 @@ class edge extends THREE.Line {
 		const curve = new THREE.CatmullRomCurve3([
 			vertices[v1].position,
 			new THREE.Vector3( (vertices[v1].position.x *4 + vertices[v2].position.x)/5, 
-			                   (vertices[v1].position.y *4 + vertices[v2].position.y)/5, 
-							   (vertices[v1].position.z *4 + vertices[v2].position.z)/5 ).setLength(vertexRadius),
-			new THREE.Vector3( (vertices[v1].position.x *2 + vertices[v2].position.x)/3, 
-			                   (vertices[v1].position.y *2 + vertices[v2].position.y)/3, 
-							   (vertices[v1].position.z *2 + vertices[v2].position.z)/3 ).setLength(vertexRadius),
+							(vertices[v1].position.y *4 + vertices[v2].position.y)/5,
+							(vertices[v1].position.z *4 + vertices[v2].position.z)/5 ).setLength(vertexRadius),
 			new THREE.Vector3( (vertices[v1].position.x + vertices[v2].position.x)/2, 
-			                   (vertices[v1].position.y + vertices[v2].position.y)/2, 
-							   (vertices[v1].position.z + vertices[v2].position.z)/2 ).setLength(vertexRadius),
-			new THREE.Vector3( (vertices[v1].position.x + vertices[v2].position.x *2)/3, 
-			                   (vertices[v1].position.y + vertices[v2].position.y *2)/3, 
-							   (vertices[v1].position.z + vertices[v2].position.z *2)/3 ).setLength(vertexRadius),
+							(vertices[v1].position.y + vertices[v2].position.y)/2,
+							(vertices[v1].position.z + vertices[v2].position.z)/2 ).setLength(vertexRadius),
 			new THREE.Vector3( (vertices[v1].position.x + vertices[v2].position.x *4)/5, 
-			                   (vertices[v1].position.y + vertices[v2].position.y *4)/5, 
-							   (vertices[v1].position.z + vertices[v2].position.z *4)/5 ).setLength(vertexRadius),
+							(vertices[v1].position.y + vertices[v2].position.y *4)/5,
+							(vertices[v1].position.z + vertices[v2].position.z *4)/5 ).setLength(vertexRadius),
 			vertices[v2].position],
 			false,
 			"chordal"
@@ -477,20 +479,17 @@ const setDots = () => {
     const dotGeom = new THREE.SphereGeometry(0.7, 12, 12);
     const dotMat = new THREE.MeshPhongMaterial({color: 0x112211});
 	
+	let initPosArr = [-.940,.340,-.33,.562,.827,.36,-.206,.915,-.347,-.272,-.949,.160,-.613,-.142,.777,.563,-.374,-.737];
     for (let i = 0; i < 6; i++) {
 
 		dotMat.transparent = false;
 		tmpDot = new dot(dotGeom, dotMat);
 		dots.push(tmpDot);
 		
-		tmpDot.position.x = Math.sin(Math.random() * 20);
-		tmpDot.position.y = Math.cos(Math.random() * 20);
-		tmpDot.position.z = Math.random() * 2 - 1;
+		tmpDot.position.x = initPosArr[3*i];
+		tmpDot.position.y = initPosArr[3*i+1];
+		tmpDot.position.z = initPosArr[3*i+2];
 		tmpDot.position.normalize();
-		if (tmpDot.position.z == 1) {
-			tmpDot.position.z -= 0.01;
-			tmpDot.position.normalize();
-		}
 		tmpDot.position.setLength(20);
 
 		scene1.add(tmpDot);
@@ -553,26 +552,37 @@ const setCircles2 = () => {
 	
 }
 
-const updateCircles2 = () => {
-
-	let tmpCircle, torusGeom, torusMat, ctr3;
-	let removedCircles = false;
-
-	for (let i=0; i<circles.length; i++) {
-
-		if (!dotGroups[circles[i].dg].areDotsDivided()) {
-
+const cleanupCircles = () => {
+	
+	if (circleUpdateFreq == 1) {
+		for (let i=0; i<circles.length; i++) {
 			scene1.remove(circles[i]);
 			circleGeoms[i].dispose();
 			let currDg = circles[i].dg;
 			circles.splice(i,1);
 			circleGeoms.splice(i,1);
-
 			dotGroups[currDg].circles = 0;
-			removedCircles = true;
+		}
+	} else if (circleUpdateFreq == 0) {
+		for (let i=0; i<circles.length; i++) {
+			if (!dotGroups[circles[i].dg].areDotsDivided()) {
+				scene1.remove(circles[i]);
+				circleGeoms[i].dispose();
+				let currDg = circles[i].dg;
+				circles.splice(i,1);
+				circleGeoms.splice(i,1);
+				dotGroups[currDg].circles = 0;
+			}
 		}
 	}
+}		
 
+const updateCircles2 = () => {
+
+	let tmpCircle, torusGeom, torusMat, ctr3;
+
+	cleanupCircles();
+	
 	for (let i=0; i<10; i++) {
 
 		if (dotGroups[i].circles < 1) {
@@ -643,7 +653,7 @@ const setVertices = () => {
 				tmpPos1.addScaledVector(normalVec, vertexRadius);
 				tmpPos2.addScaledVector(normalVec, -vertexRadius);
 
-				const vertGeom = new THREE.SphereGeometry(1.0, 12, 12);
+				const vertGeom = new THREE.SphereGeometry(0.7, 12, 12);
 				const vertMat1 = new THREE.MeshPhongMaterial({color: sphVertexColor1, opacity: 0.0});
 				const vertMat2 = new THREE.MeshPhongMaterial({color: sphVertexColor1, opacity: 0.0});
 				vertMat1.transparent = true;
@@ -693,55 +703,288 @@ const setVertices = () => {
 
 }
 
-const setEdgeVisibility = () => {
-	let d1, d2;
-	let vCount = 0;
-	for (let i=0; i<edges.length; i++) {
+// function cleanValence4 (i) {
+	
+	// for (const j of vertexPairs[i].neighborGroups) {
+		// if (vertexPairs[j].visible) {
+			// if (vertexPairs[j].valence == 4) {
+				// if (edges[vertexPairs[i].v1][vertexPairs[j].v1].visible) {
+					// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
+					// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
+					// vertexPairs[i].valence--;
+					// vertexPairs[j].valence--;
+					// return true;
+				// } else if (edges[vertexPairs[i].v1][vertexPairs[j].v2].visible) {
+					// edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = false;
+					// edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = false;
+					// vertexPairs[i].valence--;
+					// vertexPairs[j].valence--;
+					// return true;
+				// }
+			// }
+		// }	
+	// }				
+	
+	// return false;
+// }
 
-		edges[i].visible = false;
+// function cleanValence2 (i) {
+	
+	// for (const j of vertexPairs[i].neighborGroups) {
+		// if (vertexPairs[j].visible) {
+			// if (edges[vertexPairs[i].v1][vertexPairs[j].v1].visible == false && edges[vertexPairs[i].v1][vertexPairs[j].v2].visible == false) {
+				// if (vertexPairs[j].valence == 3) {
+					// for (const k of vertexPairs[j].neighborGroups) {
+						// if (vertexPairs[k].visible) {
+							// if (vertexPairs[k].valence == 4) {
+								// if (edges[vertexPairs[j].v1][vertexPairs[k].v1].visible) {
+									// edges[vertexPairs[j].v1][vertexPairs[k].v1].visible = false;
+									// edges[vertexPairs[j].v2][vertexPairs[k].v2].visible = false;
+									// if (vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v1].position) < vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v2].position)) {
+										// edges[vertexPairs[j].v1][vertexPairs[i].v1].visible = true;
+										// edges[vertexPairs[j].v2][vertexPairs[i].v2].visible = true;
+									// } else {
+										// edges[vertexPairs[j].v1][vertexPairs[i].v2].visible = true;
+										// edges[vertexPairs[j].v2][vertexPairs[i].v1].visible = true;
+									// }
+									// vertexPairs[k].valence--;
+									// vertexPairs[i].valence++;
+									
+									// return true;
 
-		const vpStart = vertices[edges[i].start].vp;
-		const vpEnd = vertices[edges[i].end].vp;
+								// } else if (edges[vertexPairs[j].v1][vertexPairs[k].v2].visible) {
+									// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
+									// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
+									// if (vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v1].position) < vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v2].position)) {
+										// edges[vertexPairs[j].v1][vertexPairs[i].v1].visible = true;
+										// edges[vertexPairs[j].v2][vertexPairs[i].v2].visible = true;
+									// } else {
+										// edges[vertexPairs[j].v1][vertexPairs[i].v2].visible = true;
+										// edges[vertexPairs[j].v2][vertexPairs[i].v1].visible = true;
+									// }
+									// vertexPairs[k].valence--;
+									// vertexPairs[i].valence++;
+
+									// return true;
+								// }								
+							// }
+						// }
+					// }
+				// } 
+			// }
+		// }	
+	// }				
+	
+	// return false;
+// }
+
+// const cleanEdges = () => {
+	// let foundSomething;
+	// do{
+		// foundSomething = false;
+		// for (let i=0; i< vertexPairs.length; i++) {
+			// if (vertexPairs[i].visible) {
+				// if (vertexPairs[i].valence == 4) {
+
+					// if (cleanValence4(i)) foundSomething = true;
+					
+				// } else if (vertexPairs[i].valence == 2) {
+					
+					// if (cleanValence2(i)) foundSomething = true;
+				// }
+			// }
+		// }
+	// }while(foundSomething);
+	
+// }
+
+// const cleanTriangles = () => {
+	// let foundSomething;
+	// do{
+		// foundSomething = false;
+
+		// for (let i=0; i<vertexPairs.length; i++) {
+			// if (vertexPairs[i].visible) {
+				// for (const j of vertexPairs[i].neighborGroups) {
+					// if (vertexPairs[j].visible) {
+						// if (edges[vertexPairs[i].v1][vertexPairs[j].v1].visible){
+							// for (const k of vertexPairs[j].neighborGroups) {
+								// if (vertexPairs[i].isNeighbor(k) && vertexPairs[k].visible) {
+									// if (edges[vertexPairs[i].v1][vertexPairs[k].v1].visible && edges[vertexPairs[j].v1][vertexPairs[k].v1].visible){
+										// foundSomething = true;
+										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v1].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v1].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[k].v1].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[k].v2].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[k].valence -= 2;
+										// } else if (vertices[vertexPairs[j].v1].black == vertices[vertexPairs[k].v1].black) {
+											// edges[vertexPairs[j].v1][vertexPairs[k].v1].visible = false;
+											// edges[vertexPairs[j].v2][vertexPairs[k].v2].visible = false;
+											// vertexPairs[k].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// }
+									// } else if (edges[vertexPairs[i].v1][vertexPairs[k].v2].visible && edges[vertexPairs[j].v1][vertexPairs[k].v2].visible){
+										// foundSomething = true;
+										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v1].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v2].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[k].v2].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[k].v1].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[k].valence -= 2;
+										// } else if (vertices[vertexPairs[j].v1].black == vertices[vertexPairs[k].v2].black) {
+											// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
+											// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
+											// vertexPairs[k].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// }
+										
+									// }
+								// }
+							// }
+
+						// } else if (edges[vertexPairs[i].v1][vertexPairs[j].v2].visible){
+							// for (const k of vertexPairs[j].neighborGroups) {
+								// if (vertexPairs[i].isNeighbor(k) && vertexPairs[k].visible) {
+									// if (edges[vertexPairs[i].v1][vertexPairs[k].v1].visible && edges[vertexPairs[j].v2][vertexPairs[k].v1].visible){
+										// foundSomething = true;
+										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v2].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v1].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[k].v1].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[k].v2].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[k].valence -= 2;
+										// } else if (vertices[vertexPairs[j].v2].black == vertices[vertexPairs[k].v1].black) {
+											// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
+											// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
+											// vertexPairs[k].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// }
+									// } else if (edges[vertexPairs[i].v1][vertexPairs[k].v2].visible && edges[vertexPairs[j].v2][vertexPairs[k].v2].visible){
+										// foundSomething = true;
+										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v1].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v2].black) {
+											// edges[vertexPairs[i].v1][vertexPairs[k].v2].visible = false;
+											// edges[vertexPairs[i].v2][vertexPairs[k].v1].visible = false;
+											// vertexPairs[i].valence -= 2;
+											// vertexPairs[k].valence -2;
+										// } else if (vertices[vertexPairs[j].v2].black == vertices[vertexPairs[k].v2].black) {
+											// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
+											// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
+											// vertexPairs[k].valence -= 2;
+											// vertexPairs[j].valence -= 2;
+										// }
+									// }
+								// }
+							// }
+						// }
+					// }
+				// }
+			// }
+		// }
+		// if (foundSomething) console.log("cleaned a triangle");
 		
-		if (vertexPairs[vpStart].visible && vertexPairs[vpEnd].visible) {
-			if (vertices[edges[i].start].visible && vertices[edges[i].end].visible) {
-				if (vertexPairs[vpStart].isNeighbor(vpEnd)) {
+	// }while(foundSomething);
 
-					let startArr, endArr;
+// }
 
-					if (edges[i].start == vertexPairs[vpStart].v1) {
-						startArr = [...new Set([...vertexPairs[vpStart].planeDots, ...vertexPairs[vpStart].posDots])];
-					} else {
-						startArr = [...new Set([...vertexPairs[vpStart].planeDots, ...vertexPairs[vpStart].negDots])];
-					}
-					if (edges[i].end == vertexPairs[vpEnd].v1) {
-						endArr   = [...new Set([...vertexPairs[vpEnd].planeDots, ...vertexPairs[vpEnd].posDots])];
-					} else {
-						endArr   = [...new Set([...vertexPairs[vpEnd].planeDots, ...vertexPairs[vpEnd].negDots])];
-					}
+// const glueUnboundedRegions = () => {
+	// let foundSomething;
+	// do{
+		// foundSomething = false;
+		// for (let i=0; i<vertexPairs.length; i++) {
+			// for (const j of vertexPairs[i].neighborGroups) {
+				// let intersectionIJ = vertexPairs[i].planeDots.filter(x => vertexPairs[j].planeDots.includes(x));
+				// for (const k of vertexPairs[j].neighborGroups) {
+					// if (k != i) {
+						// let intersection = intersectionIJ.filter(x => vertexPairs[k].planeDots.includes(x));
+						// if (intersection.length == 2) {
+							// //not enough
+							// //what to check
+						// }
+					// }
+				// }
+			// }
+		// }
+	// }while(foundSomething);
+// }
 
-					let posIntersection = startArr.filter(x => endArr.includes(x));
-					if (edges[i].start.black || edges[i].end.black) {
-						if (posIntersection.length == 5) {
-							edges[i].visible = true;
-							vCount++;
-						}
-					} else {
-						if (posIntersection.length == 4) {
-							edges[i].visible = true;
-							vCount++;
+const setEdgeVisibility = () => {
+
+	let i, j, iMax, jMax, tmpEdge;
+	let vCount = 0;
+	
+	jMax = vertexPairs.length;
+	iMax = jMax - 1;
+	for (j=0; j<jMax; j++) {
+		vertexPairs[j].valence = 0;
+	}
+
+	for (i=0; i<iMax; i++) {
+		for (j=i+1; j<jMax; j++) {
+			if (vertexPairs[i].isNeighbor(j)) {
+				edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
+				edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = false;
+				edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = false;
+				edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
+				
+				if (graphVisible) {
+
+					if (vertexPairs[i].visible && vertexPairs[j].visible) {
+						let startArr = [...new Set([...vertexPairs[i].planeDots, ...vertexPairs[i].posDots])];
+						let endArr   = [...new Set([...vertexPairs[j].planeDots, ...vertexPairs[j].posDots])];
+						let posIntersection = startArr.filter(x => endArr.includes(x));
+
+						if (posIntersection.length == 2) {
+							edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = true;
+							edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = true;
+							vertexPairs[i].valence++;
+							vertexPairs[j].valence++;
+							vCount += 2;
+						} else if (posIntersection.length == 4) {
+							edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = true;
+							edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = true;
+							vertexPairs[i].valence++;
+							vertexPairs[j].valence++;
+							vCount += 2;
 						}
 					}
 				}
 			}
 		}
 	}
-	console.log(vCount, "edges");
+	
+	//glueUnboundedRegions();
+	//cleanTriangles();
+	//cleanEdges();
+	//console.log(vCount, "edges");
+
 }
 
 const setEdges = () => {
 	
 	let i, j, iMax, jMax, tmpEdge;
+	edges = new Array(vertices.length);
+	for (i=0; i < vertices.length; i++) {
+		edges[i] = new Array(vertices.length);
+	}
+
 	i = 0;
 	jMax = vertexPairs.length;
 	iMax = jMax - 1;
@@ -750,19 +993,23 @@ const setEdges = () => {
 		while (j < jMax) {
 			if (vertexPairs[i].isNeighbor(j)) {
 				tmpEdge = new edge(vertexPairs[i].v1, vertexPairs[j].v1);
-				edges.push(tmpEdge);
+				edges[vertexPairs[i].v1][vertexPairs[j].v1] = tmpEdge;
+				edges[vertexPairs[j].v1][vertexPairs[i].v1] = tmpEdge;
 				scene1.add(tmpEdge);
 
 				tmpEdge = new edge(vertexPairs[i].v1, vertexPairs[j].v2);
-				edges.push(tmpEdge);
+				edges[vertexPairs[i].v1][vertexPairs[j].v2] = tmpEdge;
+				edges[vertexPairs[j].v2][vertexPairs[i].v1] = tmpEdge;
 				scene1.add(tmpEdge);
 
 				tmpEdge = new edge(vertexPairs[i].v2, vertexPairs[j].v1);
-				edges.push(tmpEdge);
+				edges[vertexPairs[i].v2][vertexPairs[j].v1] = tmpEdge;
+				edges[vertexPairs[j].v1][vertexPairs[i].v2] = tmpEdge;
 				scene1.add(tmpEdge);
 
 				tmpEdge = new edge(vertexPairs[i].v2, vertexPairs[j].v2);
-				edges.push(tmpEdge);
+				edges[vertexPairs[i].v2][vertexPairs[j].v2] = tmpEdge;
+				edges[vertexPairs[j].v2][vertexPairs[i].v2] = tmpEdge;
 				scene1.add(tmpEdge);
 			}
 			j++;
@@ -816,30 +1063,93 @@ const updateVertices = () => {
 
 const updateEdges = () => {
 	
-	for (let i=0; i<edges.length; i++) {
-		const curve = new THREE.CatmullRomCurve3([
-			vertices[edges[i].start].position,
-			new THREE.Vector3( (vertices[edges[i].start].position.x *4 + vertices[edges[i].end].position.x)/5, 
-							   (vertices[edges[i].start].position.y *4 + vertices[edges[i].end].position.y)/5, 
-							   (vertices[edges[i].start].position.z *4 + vertices[edges[i].end].position.z)/5 ).setLength(vertexRadius),
-			new THREE.Vector3( (vertices[edges[i].start].position.x *2 + vertices[edges[i].end].position.x)/3, 
-							   (vertices[edges[i].start].position.y *2 + vertices[edges[i].end].position.y)/3, 
-							   (vertices[edges[i].start].position.z *2 + vertices[edges[i].end].position.z)/3 ).setLength(vertexRadius),
-			new THREE.Vector3( (vertices[edges[i].start].position.x + vertices[edges[i].end].position.x)/2, 
-			                   (vertices[edges[i].start].position.y + vertices[edges[i].end].position.y)/2, 
-							   (vertices[edges[i].start].position.z + vertices[edges[i].end].position.z)/2 ).setLength(vertexRadius),
-			new THREE.Vector3( (vertices[edges[i].start].position.x + vertices[edges[i].end].position.x *2)/3, 
-			                   (vertices[edges[i].start].position.y + vertices[edges[i].end].position.y *2)/3, 
-							   (vertices[edges[i].start].position.z + vertices[edges[i].end].position.z *2)/3 ).setLength(vertexRadius),
-			new THREE.Vector3( (vertices[edges[i].start].position.x + vertices[edges[i].end].position.x *4)/5, 
-			                   (vertices[edges[i].start].position.y + vertices[edges[i].end].position.y *4)/5, 
-							   (vertices[edges[i].start].position.z + vertices[edges[i].end].position.z *4)/5 ).setLength(vertexRadius),
-			vertices[edges[i].end].position],
-			false,
-			"chordal"
-		);
-		const points = curve.getPoints( 50 );
-		edges[i].geometry.setFromPoints(points);
+	if (graphVisible) {
+		let i, j, iMax, jMax, tmpEdge;
+		i = 0;
+		jMax = vertexPairs.length;
+		iMax = jMax - 1;
+		while (i < iMax) {
+			j = i+1;
+			while (j < jMax) {
+				
+				if (vertexPairs[i].isNeighbor(j)) {
+				
+					const curve1 = new THREE.CatmullRomCurve3([
+						vertices[vertexPairs[i].v1].position,
+						new THREE.Vector3( (vertices[vertexPairs[i].v1].position.x *4 + vertices[vertexPairs[j].v1].position.x)/5, 
+										(vertices[vertexPairs[i].v1].position.y *4 + vertices[vertexPairs[j].v1].position.y)/5,
+										(vertices[vertexPairs[i].v1].position.z *4 + vertices[vertexPairs[j].v1].position.z)/5 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v1].position.x + vertices[vertexPairs[j].v1].position.x)/2, 
+										(vertices[vertexPairs[i].v1].position.y + vertices[vertexPairs[j].v1].position.y)/2,
+										(vertices[vertexPairs[i].v1].position.z + vertices[vertexPairs[j].v1].position.z)/2 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v1].position.x + vertices[vertexPairs[j].v1].position.x *4)/5,
+										(vertices[vertexPairs[i].v1].position.y + vertices[vertexPairs[j].v1].position.y *4)/5,
+										(vertices[vertexPairs[i].v1].position.z + vertices[vertexPairs[j].v1].position.z *4)/5 ).setLength(vertexRadius),
+						vertices[vertexPairs[j].v1].position],
+						false,
+						"chordal"
+					);
+					const points1 = curve1.getPoints( 50 );
+					edges[vertexPairs[i].v1][vertexPairs[j].v1].geometry.setFromPoints(points1);
+
+					const curve2 = new THREE.CatmullRomCurve3([
+						vertices[vertexPairs[i].v1].position,
+						new THREE.Vector3( (vertices[vertexPairs[i].v1].position.x *4 + vertices[vertexPairs[j].v2].position.x)/5, 
+										(vertices[vertexPairs[i].v1].position.y *4 + vertices[vertexPairs[j].v2].position.y)/5,
+										(vertices[vertexPairs[i].v1].position.z *4 + vertices[vertexPairs[j].v2].position.z)/5 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v1].position.x + vertices[vertexPairs[j].v2].position.x)/2, 
+										(vertices[vertexPairs[i].v1].position.y + vertices[vertexPairs[j].v2].position.y)/2,
+										(vertices[vertexPairs[i].v1].position.z + vertices[vertexPairs[j].v2].position.z)/2 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v1].position.x + vertices[vertexPairs[j].v2].position.x *4)/5,
+										(vertices[vertexPairs[i].v1].position.y + vertices[vertexPairs[j].v2].position.y *4)/5,
+										(vertices[vertexPairs[i].v1].position.z + vertices[vertexPairs[j].v2].position.z *4)/5 ).setLength(vertexRadius),
+						vertices[vertexPairs[j].v2].position],
+						false,
+						"chordal"
+					);
+					const points2 = curve2.getPoints( 50 );
+					edges[vertexPairs[i].v1][vertexPairs[j].v2].geometry.setFromPoints(points2);
+
+					const curve3 = new THREE.CatmullRomCurve3([
+						vertices[vertexPairs[i].v2].position,
+						new THREE.Vector3( (vertices[vertexPairs[i].v2].position.x *4 + vertices[vertexPairs[j].v1].position.x)/5, 
+										(vertices[vertexPairs[i].v2].position.y *4 + vertices[vertexPairs[j].v1].position.y)/5,
+										(vertices[vertexPairs[i].v2].position.z *4 + vertices[vertexPairs[j].v1].position.z)/5 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v2].position.x + vertices[vertexPairs[j].v1].position.x)/2, 
+										(vertices[vertexPairs[i].v2].position.y + vertices[vertexPairs[j].v1].position.y)/2,
+										(vertices[vertexPairs[i].v2].position.z + vertices[vertexPairs[j].v1].position.z)/2 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v2].position.x + vertices[vertexPairs[j].v1].position.x *4)/5,
+										(vertices[vertexPairs[i].v2].position.y + vertices[vertexPairs[j].v1].position.y *4)/5,
+										(vertices[vertexPairs[i].v2].position.z + vertices[vertexPairs[j].v1].position.z *4)/5 ).setLength(vertexRadius),
+						vertices[vertexPairs[j].v1].position],
+						false,
+						"chordal"
+					);
+					const points3 = curve3.getPoints( 50 );
+					edges[vertexPairs[i].v2][vertexPairs[j].v1].geometry.setFromPoints(points3);
+
+					const curve4 = new THREE.CatmullRomCurve3([
+						vertices[vertexPairs[i].v2].position,
+						new THREE.Vector3( (vertices[vertexPairs[i].v2].position.x *4 + vertices[vertexPairs[j].v2].position.x)/5, 
+										(vertices[vertexPairs[i].v2].position.y *4 + vertices[vertexPairs[j].v2].position.y)/5,
+										(vertices[vertexPairs[i].v2].position.z *4 + vertices[vertexPairs[j].v2].position.z)/5 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v2].position.x + vertices[vertexPairs[j].v2].position.x)/2, 
+										(vertices[vertexPairs[i].v2].position.y + vertices[vertexPairs[j].v2].position.y)/2,
+										(vertices[vertexPairs[i].v2].position.z + vertices[vertexPairs[j].v2].position.z)/2 ).setLength(vertexRadius),
+						new THREE.Vector3( (vertices[vertexPairs[i].v2].position.x + vertices[vertexPairs[j].v2].position.x *4)/5,
+										(vertices[vertexPairs[i].v2].position.y + vertices[vertexPairs[j].v2].position.y *4)/5,
+										(vertices[vertexPairs[i].v2].position.z + vertices[vertexPairs[j].v2].position.z *4)/5 ).setLength(vertexRadius),
+						vertices[vertexPairs[j].v2].position],
+						false,
+						"chordal"
+					);
+					const points4 = curve4.getPoints( 50 );
+					edges[vertexPairs[i].v2][vertexPairs[j].v2].geometry.setFromPoints(points4);
+				}
+				j++;
+			}
+			i++;
+		}
 	}
 	
 	setEdgeVisibility();
@@ -853,8 +1163,6 @@ const updateGraph = () => {
 	
 }
 	
-
-
 const guiObj = {
 	autoRotate: false,
 	sphereColor: 0x9b66e6,
@@ -865,8 +1173,9 @@ const guiObj = {
 	dotColor: 0x112211,
 	displayCircles: true,
 	circleColor: 0x202020,
+	circleUpdates: 1,
 	displayGraph: false,
-	graphScale: 1.2,
+	graphScale: 1.02,
 	vertexColor1: 0x5ac3d8,
 	vertexColor2: 0xffc800,
 	edgeColor: 0xd85ac7
@@ -927,14 +1236,15 @@ circleFolder.addColor(guiObj, 'circleColor').onChange( value => {
 		circles[i].material.color.set(value);
 	}
 } );
+circleFolder.add(guiObj, 'circleUpdates', {less: 0, more:1}).onChange( value => {
+	circleUpdateFreq = value;
+} );
 const graphFolder = gui.addFolder( 'sphebic graph (in development)' );
 graphFolder.add(guiObj, 'displayGraph').onChange( value => {
-	for (let i=0; i<vertexPairs.length; i++) {
-		vertexPairs[i].setDisplay(value);
-	}
-	setEdgeVisibility();
+	graphVisible = value;
+	updateGraph();
 } );
-graphFolder.add(guiObj, 'graphScale', 1.05, 2.0).onChange( value => {
+graphFolder.add(guiObj, 'graphScale', 1.0, 2.0).onChange( value => {
 	vertexRadius = value * 20.0;
 	updateGraph();
 } );
@@ -948,15 +1258,29 @@ graphFolder.addColor(guiObj, 'vertexColor2').onChange( value => {
 } );
 graphFolder.addColor(guiObj, 'edgeColor').onChange( value => {
 	sphEdgeColor = value;
-	for (let j=0; j<edges.length; j++) {
-		edges[j].material.color.set(value);
+	
+	let i, j, iMax, jMax;
+	i = 0;
+	jMax = vertexPairs.length;
+	iMax = jMax - 1;
+	while (i < iMax) {
+		j = i+1;
+		while (j < jMax) {
+			if (vertexPairs[i].isNeighbor(j)) {
+				edges[vertexPairs[i].v1][vertexPairs[j].v1].material.color.set(value);
+				edges[vertexPairs[i].v1][vertexPairs[j].v2].material.color.set(value);
+				edges[vertexPairs[i].v2][vertexPairs[j].v1].material.color.set(value);
+				edges[vertexPairs[i].v2][vertexPairs[j].v2].material.color.set(value);
+			}
+			j++;
+		}
+		i++;
 	}
 } );
 
 function animate() {
     requestAnimationFrame(animate);
 
-    // Update the position of the dots
 	if(guiObj.animateDots) {
 		dots[0].position.applyMatrix3(Ry);
 		dots[1].position.applyMatrix3(Rx);
@@ -965,8 +1289,12 @@ function animate() {
 		dots[4].position.applyMatrix3(Rxy);
 		dots[5].position.applyMatrix3(Rxz);
 		
-		updateCircles2();
-		updateGraph();
+		if (circlesVisible) {
+			updateCircles2();
+		}
+		if (graphVisible) {
+			updateGraph();
+		}
 
 		renderer.render(scene1, camera1);
 
