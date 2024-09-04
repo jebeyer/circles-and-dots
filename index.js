@@ -216,18 +216,49 @@ class vertexPair {
 		this.negDots = [];
 		this.neighborGroups = [];
 		this.visible = false;
-		this.valence = 0;
+	}
+	partitionProblem(plane) {
+		if (plane.isPlane) {
+
+			let newPosDots = [];
+			let newNegDots = [];
+			
+			const vertDists = [];
+			vertDists.push(Math.sign(plane.distanceToPoint(vertices[this.v1].position)));
+			vertDists.push(Math.sign(plane.distanceToPoint(vertices[this.v2].position)));
+				
+			let tmpDist;
+			for (let i=0; i<6; i++) {
+				if (!this.planeDots.includes(i)) {
+					tmpDist = Math.sign(plane.distanceToPoint(dots[i].position));
+					if (tmpDist == vertDists[0]) {
+						newPosDots.push(i);
+					} else if (tmpDist == vertDists[1]) {
+						newNegDots.push(i);
+					}
+				}
+			}
+			if (newPosDots.length == 3) {
+				return true;
+			} else if (this.negDots.length == 3 && newPosDots.length == 2) {
+				return true;
+			} else if (this.posDots.length == 3 && newNegDots.length == 2) {
+				return true;
+			}
+			let intersection1 = newPosDots.filter(x => this.posDots.includes(x));
+			let intersection2 = newNegDots.filter(x => this.negDots.includes(x));
+			if (intersection1.length == this.negDots.length && intersection2.length == this.posDots.length) {
+				return true;
+			}
+		}
+		return false;
 	}
 	setVertexColors(plane) {
 		if (plane.isPlane) {
 
-			while (this.posDots.length > 0) {
-				this.posDots.pop();
-			}
-			while (this.negDots.length > 0) {
-				this.negDots.pop();
-			}
-
+			this.posDots = [];
+			this.negDots = [];
+			
 			const vertDists = [];
 			vertDists.push(Math.sign(plane.distanceToPoint(vertices[this.v1].position)));
 			vertDists.push(Math.sign(plane.distanceToPoint(vertices[this.v2].position)));
@@ -247,14 +278,18 @@ class vertexPair {
 				this.visible = true;
 				vertices[this.v1].visible = true;
 				vertices[this.v1].black = false;
+				vertices[this.v1].material.color.set(sphVertexColor2);
 				vertices[this.v2].visible = true;
 				vertices[this.v2].black = true;
+				vertices[this.v2].material.color.set(sphVertexColor1);
 			} else if (this.posDots.length == 2 && this.negDots.length == 1) {
 				this.visible = true;
 				vertices[this.v1].visible = true;
 				vertices[this.v1].black = true;
+				vertices[this.v1].material.color.set(sphVertexColor1);
 				vertices[this.v2].visible = true;
 				vertices[this.v2].black = false;
+				vertices[this.v2].material.color.set(sphVertexColor2);
 			} else {
 				this.visible = false;
 				vertices[this.v1].visible = false;
@@ -272,20 +307,12 @@ class vertexPair {
 		
 		if (this.visible && graphVisible) {
 			if (vertices[this.v1].visible && vertices[this.v2].visible) {
-				if (vertices[this.v1].black) {
-					vertices[this.v1].material.color.set(sphVertexColor1);
-					vertices[this.v2].material.color.set(sphVertexColor2);
-				} else {
-					vertices[this.v2].material.color.set(sphVertexColor1);
-					vertices[this.v1].material.color.set(sphVertexColor2);
-				}
 				vertices[this.v1].material.opacity = 1.0;
 				vertices[this.v2].material.opacity = 1.0;
 			} else {
 				vertices[this.v1].material.opacity = 0.0;
 				vertices[this.v2].material.opacity = 0.0;
 			}
-			
 		} else {
 			vertices[this.v1].material.opacity = 0.0;
 			vertices[this.v2].material.opacity = 0.0;
@@ -342,8 +369,6 @@ class dotGroup {
 		for (let i=0; i<6; i++) {
 			if (i != index1 && i != index2 && i != index3) this.right.push(i);
 		}
-		this.center2 = new THREE.Vector2();
-		this.radius2 = 0.0;
 		this.circles = 0;
 		this.plane = new THREE.Plane();
 		this.center3 = new THREE.Vector3();
@@ -381,7 +406,7 @@ class dotGroup {
 		for (let i=0; i<3; i++) {
 			for (let j=0; j<3; j++) {
 				currIndex = 3*i + j;
-				tmpDist = dots[this.left[i]].position.distanceTo(dots[this.right[j]].position);
+				tmpDist = dots[this.left[i]].position.distanceToSquared(dots[this.right[j]].position);
 				distanceMat[currIndex] = tmpDist;
 				
 				let newIndex = currIndex;
@@ -438,8 +463,7 @@ class dotGroup {
 						zeroVec.addScaledVector(normalVec, distanceToCenter);
 						this.center3.copy(zeroVec);
 
-						this.radius3.copy(pt1);
-						this.radius3.addScaledVector(this.center3,-1.0);
+						this.radius3.subVectors(pt1,this.center3);
 						this.radius3.setLength(20.0*Math.sin(Math.acos(distanceToCenter/20.0)));
 
 						return true;
@@ -475,11 +499,12 @@ function setupDgList () {
 
 const setDots = () => {
 	
-    let tmpDot, randomx, randomy, randomz, scaleMag;
+    let tmpDot;
     const dotGeom = new THREE.SphereGeometry(0.7, 12, 12);
     const dotMat = new THREE.MeshPhongMaterial({color: 0x112211});
 	
 	let initPosArr = [-.940,.340,-.33,.562,.827,.36,-.206,.915,-.347,-.272,-.949,.160,-.613,-.142,.777,.563,-.374,-.737];
+	//let initPosArr = [-.893,.129,-.431,.562,.827,.36,-.206,.915,-.347,-.272,-.949,.160,-.613,-.142,.777,.563,-.374,-.737];
     for (let i = 0; i < 6; i++) {
 
 		dotMat.transparent = false;
@@ -491,11 +516,8 @@ const setDots = () => {
 		tmpDot.position.z = initPosArr[3*i+2];
 		tmpDot.position.normalize();
 		tmpDot.position.setLength(20);
-
 		scene1.add(tmpDot);
-
     }
-	
 }
 
 const updateDotPositionTable = () => {
@@ -506,7 +528,6 @@ const updateDotPositionTable = () => {
 		table1[i*4+6].textContent = (dots[i].position.y /20).toFixed(4);
 		table1[i*4+7].textContent = (dots[i].position.z /20).toFixed(4);
     }
-	
 }
 
 const setCircles2 = () => {
@@ -537,19 +558,14 @@ const setCircles2 = () => {
 			tmpCircle.translateY(ctr3.y);
 			tmpCircle.translateZ(ctr3.z);
 
-			const targetVector = new THREE.Vector3(ctr3.x, ctr3.y, ctr3.z).normalize(); // Replace with your vector
-
+			const targetVector = new THREE.Vector3(ctr3.x, ctr3.y, ctr3.z).normalize();
 			const up = new THREE.Vector3(0, 0, 1); // Torus' local Z-axis is its default "up" direction
 			const axis = new THREE.Vector3().crossVectors(up, targetVector).normalize();
-
 			const angle = Math.acos(up.dot(targetVector));
 
 			tmpCircle.quaternion.setFromAxisAngle(axis, angle);
-
 		}
-
 	}
-	
 }
 
 const cleanupCircles = () => {
@@ -608,15 +624,12 @@ const updateCircles2 = () => {
 				tmpCircle.translateY(ctr3.y);
 				tmpCircle.translateZ(ctr3.z);
 
-				const targetVector = new THREE.Vector3(ctr3.x, ctr3.y, ctr3.z).normalize(); // Replace with your vector
-
+				const targetVector = new THREE.Vector3(ctr3.x, ctr3.y, ctr3.z).normalize();
 				const up = new THREE.Vector3(0, 0, 1); // Torus' local Z-axis is its default "up" direction
 				const axis = new THREE.Vector3().crossVectors(up, targetVector).normalize();
-
 				const angle = Math.acos(up.dot(targetVector));
 
 				tmpCircle.quaternion.setFromAxisAngle(axis, angle);
-
 			}
 		}
 	}
@@ -643,6 +656,9 @@ const setVertices = () => {
 					currPlane.setFromCoplanarPoints(dots[i].position, dots[j].position, dots[k].position);
 				} else if ( det < 0 ) {
 					currPlane.setFromCoplanarPoints(dots[i].position, dots[k].position, dots[j].position);
+				}
+				if (needToFixPlane(currPlane)) {
+					currPlane.negate();
 				}
 
 			    let tmpVert;
@@ -686,7 +702,6 @@ const setVertices = () => {
 	i=0;
 	let jMax = vertexPairs.length;
 	let iMax = jMax - 1;
-	let neighbor = false;
 	while (i < iMax) {
 		j = i+1;
 		while (j < jMax) {
@@ -700,242 +715,14 @@ const setVertices = () => {
 		}
 		i++;
 	}
-
 }
-
-// function cleanValence4 (i) {
-	
-	// for (const j of vertexPairs[i].neighborGroups) {
-		// if (vertexPairs[j].visible) {
-			// if (vertexPairs[j].valence == 4) {
-				// if (edges[vertexPairs[i].v1][vertexPairs[j].v1].visible) {
-					// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
-					// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
-					// vertexPairs[i].valence--;
-					// vertexPairs[j].valence--;
-					// return true;
-				// } else if (edges[vertexPairs[i].v1][vertexPairs[j].v2].visible) {
-					// edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = false;
-					// edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = false;
-					// vertexPairs[i].valence--;
-					// vertexPairs[j].valence--;
-					// return true;
-				// }
-			// }
-		// }	
-	// }				
-	
-	// return false;
-// }
-
-// function cleanValence2 (i) {
-	
-	// for (const j of vertexPairs[i].neighborGroups) {
-		// if (vertexPairs[j].visible) {
-			// if (edges[vertexPairs[i].v1][vertexPairs[j].v1].visible == false && edges[vertexPairs[i].v1][vertexPairs[j].v2].visible == false) {
-				// if (vertexPairs[j].valence == 3) {
-					// for (const k of vertexPairs[j].neighborGroups) {
-						// if (vertexPairs[k].visible) {
-							// if (vertexPairs[k].valence == 4) {
-								// if (edges[vertexPairs[j].v1][vertexPairs[k].v1].visible) {
-									// edges[vertexPairs[j].v1][vertexPairs[k].v1].visible = false;
-									// edges[vertexPairs[j].v2][vertexPairs[k].v2].visible = false;
-									// if (vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v1].position) < vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v2].position)) {
-										// edges[vertexPairs[j].v1][vertexPairs[i].v1].visible = true;
-										// edges[vertexPairs[j].v2][vertexPairs[i].v2].visible = true;
-									// } else {
-										// edges[vertexPairs[j].v1][vertexPairs[i].v2].visible = true;
-										// edges[vertexPairs[j].v2][vertexPairs[i].v1].visible = true;
-									// }
-									// vertexPairs[k].valence--;
-									// vertexPairs[i].valence++;
-									
-									// return true;
-
-								// } else if (edges[vertexPairs[j].v1][vertexPairs[k].v2].visible) {
-									// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
-									// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
-									// if (vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v1].position) < vertices[vertexPairs[i].v1].position.distanceTo(vertices[vertexPairs[j].v2].position)) {
-										// edges[vertexPairs[j].v1][vertexPairs[i].v1].visible = true;
-										// edges[vertexPairs[j].v2][vertexPairs[i].v2].visible = true;
-									// } else {
-										// edges[vertexPairs[j].v1][vertexPairs[i].v2].visible = true;
-										// edges[vertexPairs[j].v2][vertexPairs[i].v1].visible = true;
-									// }
-									// vertexPairs[k].valence--;
-									// vertexPairs[i].valence++;
-
-									// return true;
-								// }								
-							// }
-						// }
-					// }
-				// } 
-			// }
-		// }	
-	// }				
-	
-	// return false;
-// }
-
-// const cleanEdges = () => {
-	// let foundSomething;
-	// do{
-		// foundSomething = false;
-		// for (let i=0; i< vertexPairs.length; i++) {
-			// if (vertexPairs[i].visible) {
-				// if (vertexPairs[i].valence == 4) {
-
-					// if (cleanValence4(i)) foundSomething = true;
-					
-				// } else if (vertexPairs[i].valence == 2) {
-					
-					// if (cleanValence2(i)) foundSomething = true;
-				// }
-			// }
-		// }
-	// }while(foundSomething);
-	
-// }
-
-// const cleanTriangles = () => {
-	// let foundSomething;
-	// do{
-		// foundSomething = false;
-
-		// for (let i=0; i<vertexPairs.length; i++) {
-			// if (vertexPairs[i].visible) {
-				// for (const j of vertexPairs[i].neighborGroups) {
-					// if (vertexPairs[j].visible) {
-						// if (edges[vertexPairs[i].v1][vertexPairs[j].v1].visible){
-							// for (const k of vertexPairs[j].neighborGroups) {
-								// if (vertexPairs[i].isNeighbor(k) && vertexPairs[k].visible) {
-									// if (edges[vertexPairs[i].v1][vertexPairs[k].v1].visible && edges[vertexPairs[j].v1][vertexPairs[k].v1].visible){
-										// foundSomething = true;
-										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v1].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v1].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[k].v1].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[k].v2].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[k].valence -= 2;
-										// } else if (vertices[vertexPairs[j].v1].black == vertices[vertexPairs[k].v1].black) {
-											// edges[vertexPairs[j].v1][vertexPairs[k].v1].visible = false;
-											// edges[vertexPairs[j].v2][vertexPairs[k].v2].visible = false;
-											// vertexPairs[k].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// }
-									// } else if (edges[vertexPairs[i].v1][vertexPairs[k].v2].visible && edges[vertexPairs[j].v1][vertexPairs[k].v2].visible){
-										// foundSomething = true;
-										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v1].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v2].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[k].v2].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[k].v1].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[k].valence -= 2;
-										// } else if (vertices[vertexPairs[j].v1].black == vertices[vertexPairs[k].v2].black) {
-											// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
-											// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
-											// vertexPairs[k].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// }
-										
-									// }
-								// }
-							// }
-
-						// } else if (edges[vertexPairs[i].v1][vertexPairs[j].v2].visible){
-							// for (const k of vertexPairs[j].neighborGroups) {
-								// if (vertexPairs[i].isNeighbor(k) && vertexPairs[k].visible) {
-									// if (edges[vertexPairs[i].v1][vertexPairs[k].v1].visible && edges[vertexPairs[j].v2][vertexPairs[k].v1].visible){
-										// foundSomething = true;
-										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v2].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v1].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[k].v1].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[k].v2].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[k].valence -= 2;
-										// } else if (vertices[vertexPairs[j].v2].black == vertices[vertexPairs[k].v1].black) {
-											// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
-											// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
-											// vertexPairs[k].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// }
-									// } else if (edges[vertexPairs[i].v1][vertexPairs[k].v2].visible && edges[vertexPairs[j].v2][vertexPairs[k].v2].visible){
-										// foundSomething = true;
-										// if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[j].v1].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// } else if (vertices[vertexPairs[i].v1].black == vertices[vertexPairs[k].v2].black) {
-											// edges[vertexPairs[i].v1][vertexPairs[k].v2].visible = false;
-											// edges[vertexPairs[i].v2][vertexPairs[k].v1].visible = false;
-											// vertexPairs[i].valence -= 2;
-											// vertexPairs[k].valence -2;
-										// } else if (vertices[vertexPairs[j].v2].black == vertices[vertexPairs[k].v2].black) {
-											// edges[vertexPairs[j].v1][vertexPairs[k].v2].visible = false;
-											// edges[vertexPairs[j].v2][vertexPairs[k].v1].visible = false;
-											// vertexPairs[k].valence -= 2;
-											// vertexPairs[j].valence -= 2;
-										// }
-									// }
-								// }
-							// }
-						// }
-					// }
-				// }
-			// }
-		// }
-		// if (foundSomething) console.log("cleaned a triangle");
-		
-	// }while(foundSomething);
-
-// }
-
-// const glueUnboundedRegions = () => {
-	// let foundSomething;
-	// do{
-		// foundSomething = false;
-		// for (let i=0; i<vertexPairs.length; i++) {
-			// for (const j of vertexPairs[i].neighborGroups) {
-				// let intersectionIJ = vertexPairs[i].planeDots.filter(x => vertexPairs[j].planeDots.includes(x));
-				// for (const k of vertexPairs[j].neighborGroups) {
-					// if (k != i) {
-						// let intersection = intersectionIJ.filter(x => vertexPairs[k].planeDots.includes(x));
-						// if (intersection.length == 2) {
-							// //not enough
-							// //what to check
-						// }
-					// }
-				// }
-			// }
-		// }
-	// }while(foundSomething);
-// }
 
 const setEdgeVisibility = () => {
 
-	let i, j, iMax, jMax, tmpEdge;
-	let vCount = 0;
+	let i, j, iMax, jMax;
 	
 	jMax = vertexPairs.length;
 	iMax = jMax - 1;
-	for (j=0; j<jMax; j++) {
-		vertexPairs[j].valence = 0;
-	}
-
 	for (i=0; i<iMax; i++) {
 		for (j=i+1; j<jMax; j++) {
 			if (vertexPairs[i].isNeighbor(j)) {
@@ -943,7 +730,7 @@ const setEdgeVisibility = () => {
 				edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = false;
 				edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = false;
 				edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = false;
-				
+
 				if (graphVisible) {
 
 					if (vertexPairs[i].visible && vertexPairs[j].visible) {
@@ -954,27 +741,15 @@ const setEdgeVisibility = () => {
 						if (posIntersection.length == 2) {
 							edges[vertexPairs[i].v1][vertexPairs[j].v2].visible = true;
 							edges[vertexPairs[i].v2][vertexPairs[j].v1].visible = true;
-							vertexPairs[i].valence++;
-							vertexPairs[j].valence++;
-							vCount += 2;
 						} else if (posIntersection.length == 4) {
 							edges[vertexPairs[i].v1][vertexPairs[j].v1].visible = true;
 							edges[vertexPairs[i].v2][vertexPairs[j].v2].visible = true;
-							vertexPairs[i].valence++;
-							vertexPairs[j].valence++;
-							vCount += 2;
 						}
 					}
 				}
 			}
 		}
 	}
-	
-	//glueUnboundedRegions();
-	//cleanTriangles();
-	//cleanEdges();
-	//console.log(vCount, "edges");
-
 }
 
 const setEdges = () => {
@@ -1022,7 +797,45 @@ const setGraph = () => {
 	
 	setVertices();
 	setEdges();
-	
+}
+
+function needToFixPlane(plane) {
+	if (plane.isPlane) {
+		let dotSum = new THREE.Vector3();
+		for (let i=0; i<dots.length; i++){
+			dotSum.x += dots[i].position.x;
+			dotSum.y += dots[i].position.y;
+			dotSum.z += dots[i].position.z;
+		}
+		dotSum.divideScalar(6.0);
+		if (plane.distanceToPoint(dotSum) > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+function needToFixPlane2(plane) {
+	if (plane.isPlane) {
+		let xCoords = [];
+		let yCoords = [];
+		let zCoords = [];
+		let dotMedian = new THREE.Vector3();
+		for (let i=0; i<dots.length; i++){
+			xCoords.push(dots[i].position.x);
+			yCoords.push(dots[i].position.y);
+			zCoords.push(dots[i].position.z);
+		}
+		xCoords.sort(compareNumbers);
+		yCoords.sort(compareNumbers);
+		zCoords.sort(compareNumbers);
+		dotMedian.x = (xCoords[2] + xCoords[3])/2;
+		dotMedian.y = (yCoords[2] + yCoords[3])/2;
+		dotMedian.x = (zCoords[2] + zCoords[3])/2;
+		if (plane.distanceToPoint(dotMedian) > 0) {
+			return true;
+		}
+	}
+	return false;
 }
 
 const updateVertices = () => {
@@ -1043,6 +856,13 @@ const updateVertices = () => {
 		} else if ( det < 0 ) {
 			currPlane.setFromCoplanarPoints(dots[dot1].position, dots[dot3].position, dots[dot2].position);
 		}
+		
+		if (needToFixPlane(currPlane)) {
+			currPlane.negate();
+		}
+		if (vertexPairs[i].partitionProblem(currPlane)) {
+			currPlane.negate();
+		}
 
 	    let tmpVert;
 		let tmpPos1 = new THREE.Vector3(0.0, 0.0, 0.0);
@@ -1051,14 +871,13 @@ const updateVertices = () => {
 		normalVec.normalize();
 		tmpPos1.addScaledVector(normalVec, vertexRadius);
 		tmpPos2.addScaledVector(normalVec, -vertexRadius);
-				
+
+		vertices[vertexPairs[i].v1].position.copy(tmpPos1);
 		vertices[vertexPairs[i].v1].position.copy(tmpPos1);
 		vertices[vertexPairs[i].v2].position.copy(tmpPos2);
-
+		
 		vertexPairs[i].setVertexColors(currPlane);
-				
 	}
-	
 }
 
 const updateEdges = () => {
@@ -1153,20 +972,19 @@ const updateEdges = () => {
 	}
 	
 	setEdgeVisibility();
-	
 }
 
 const updateGraph = () => {
 	
 	updateVertices();
 	updateEdges();
-	
 }
 	
 const guiObj = {
 	autoRotate: false,
 	sphereColor: 0x9b66e6,
 	sphereOpacity: 0.9,
+	backgroundColor: 0xd0d0d0,
 	displayCoordinates: true,
 	animateDots: false,
 	dotSpeed: 10,
@@ -1188,6 +1006,9 @@ gui.addColor(guiObj, 'sphereColor').onChange( value => {
 } );
 gui.add(guiObj, 'sphereOpacity', 0, 1).onChange( value => {
 	baseMesh.material.opacity = value;
+} );
+gui.addColor(guiObj, 'backgroundColor').onChange( value => {
+	scene1.background = new THREE.Color(value);
 } );
 const dotFolder = gui.addFolder( 'dots' );
 dotFolder.add(guiObj, 'displayCoordinates').onChange( value => {
@@ -1297,9 +1118,7 @@ function animate() {
 		}
 
 		renderer.render(scene1, camera1);
-
 	}
-
 }
 
 const resize = () => {
@@ -1316,7 +1135,6 @@ const resize = () => {
 	camera1.updateProjectionMatrix();
 
 	renderer.setSize(sizes.width, sizes.height);
-
 }
 
 const mousemove = (event) => {
@@ -1336,7 +1154,6 @@ const mousemove = (event) => {
 	else {
 		if(!grabbing) document.body.style.cursor = 'default';
 	}
-
 }
 
 const mousedown = () => {
@@ -1353,7 +1170,6 @@ const mousedown = () => {
 
 	document.body.style.cursor  = 'grabbing';
 	grabbing                    = true;
-
 }
 
 const mouseup = () => {
@@ -1364,7 +1180,6 @@ const mouseup = () => {
 	grabbing = false;
 	if(isIntersecting) document.body.style.cursor = 'pointer';
 	else document.body.style.cursor = 'default';
-
 }
 
 const listenTo = () => {
@@ -1373,7 +1188,6 @@ const listenTo = () => {
 	window.addEventListener('mousemove',  mousemove.bind(this));
 	window.addEventListener('mousedown',  mousedown.bind(this));
 	window.addEventListener('mouseup',    mouseup.bind(this));
-
 }
 
 const render = () => {
@@ -1391,7 +1205,6 @@ const render = () => {
 	} else {
 		circlesOutput.textContent = 0;
 	}
-  
 }
 
 setScene();
